@@ -1,0 +1,10 @@
+.venv*/
+data/
+models/
+tools/
+vendor/
+cache/
+python/
+logs/
+__pycache__/
+*.pyc

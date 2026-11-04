@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="voiceai-token" content="__TOKEN__">
+  <title>こえのアトリエ — VoiceAI Local</title>
+  <link rel="stylesheet" href="/assets/style.css"><script src="/assets/app.js" defer></script>
+</head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/"><span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>こえのアトリエ<small>VOICEAI LOCAL</small></span></a>
+  <div class="nav-label">ワークスペース</div>
+  <nav aria-label="メインメニュー">
+    <button class="nav-item active" data-tab="convert"><span aria-hidden="true">⇄</span>音声変換</button>
+    <button class="nav-item" data-tab="tts"><span aria-hidden="true">Aa</span>テキスト読み上げ</button>
+    <button class="nav-item" data-tab="voices"><span aria-hidden="true">◉</span>マイボイス<span id="voice-count" class="count">0</span></button>
+    <button class="nav-item" data-tab="history"><span aria-hidden="true">◷</span>生成履歴</button>
+  </nav>
+  <div class="sidebar-bottom"><span class="local-dot"></span> このPCで処理・保存<small>あなたの声から、新しい表現を。</small><span class="version">LOCAL EDITION / 0.1</span></div>
+</aside>
+<main>
+  <header class="topbar"><div><span class="crumb">ワークスペース</span><span class="slash">/</span><span id="crumb-title">音声変換</span></div><span class="local-badge"><span class="local-dot"></span>ローカルモード</span></header>
+  <div class="workspace">
+    <div id="setup-banner" class="setup-banner" role="status" hidden></div>
+    <section id="panel-convert" class="panel">
+      <div class="page-heading"><div><div class="eyebrow">VOICE CONVERSION</div><h1>声を変えて、表現を広げる。</h1><p>話し方を活かしながら、録音した音声をマイボイスへ。</p></div><button class="button secondary add-voice">＋ ボイスを登録</button></div>
+      <div class="editor-grid">
+        <form id="convert-form" class="card editor-card">
+          <div class="card-heading"><span class="step">01</span><h2>変換する音声</h2><span class="muted small">WAV / MP3</span></div>
+          <label class="drop-zone" id="source-drop"><input id="source-file" name="file" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" required><span class="upload-symbol" aria-hidden="true">↑</span><strong id="source-name">音声をドロップ、または選択</strong><span>60秒以内・40 MBまで</span><span class="file-button">ファイルを選ぶ</span></label>
+          <audio id="source-preview" controls hidden aria-label="変換元の音声"></audio>
+          <div class="divider"></div>
+          <div class="card-heading"><span class="step">02</span><h2>変換先のボイス</h2></div>
+          <label class="field-label" for="convert-voice">マイボイスから選択</label><select id="convert-voice" class="voice-select" required><option value="">先にボイスを登録してください</option></select>
+          <div class="inline-note"><span aria-hidden="true">↗</span>登録したクローンを、そのまま変換先に使えます。</div>
+          <details class="options"><summary>変換オプション</summary><label class="field-label" for="steps">処理の細かさ</label><select id="steps"><option value="25">標準 / 25ステップ</option><option value="10">速度優先 / 10ステップ</option><option value="50">品質を比較 / 50ステップ</option></select><p class="small muted">ステップ数を増やすと処理時間も長くなります。</p></details>
+          <div class="form-footer"><span class="small muted">音声はこのPC内で処理されます</span><button id="convert-button" class="button primary" type="submit">音声を変換 <span aria-hidden="true">→</span></button></div>
+        </form>
+        <aside class="right-column">
+          <div class="card result-card"><div class="card-heading"><h2>生成結果</h2><span class="tag">OUTPUT</span></div><div id="convert-result" class="result-body"></div></div>
+          <div class="tip-card"><span class="tip-icon" aria-hidden="true">✦</span><h3>きれいな声から、いい仕上がり。</h3><p>1人で話す、BGMのない明瞭な録音がおすすめです。まずは10秒ほどの短い音声で試してみましょう。</p></div>
+        </aside>
+      </div>
+      <div class="workflow-note"><span>YOUR WORKFLOW</span><b>声を登録</b><i>→</i><b>変換・読み上げ</b><i>→</i><b>聴く・保存する</b></div>
+    </section>
+    <section id="panel-tts" class="panel" hidden>
+      <div class="page-heading"><div><div class="eyebrow">TEXT TO SPEECH</div><h1>ことばに、あなたの声を。</h1><p>日本語の文章を、登録したボイスで読み上げます。</p></div><button class="button secondary add-voice">＋ ボイスを登録</button></div>
+      <div class="editor-grid"><form id="tts-form" class="card editor-card">
+        <div class="card-heading"><span class="step">01</span><h2>読み上げる文章</h2></div>
+        <label class="sr-only" for="tts-text">日本語の文章</label><textarea id="tts-text" maxlength="500" required placeholder="ここに読み上げたい文章を入力してください。" rows="9"></textarea><div class="char-count"><span id="text-count">0</span> / 500文字</div>
+        <div class="card-heading"><span class="step">02</span><h2>読み上げるボイス</h2></div><label class="sr-only" for="tts-voice">ボイスを選択</label><select id="tts-voice" class="voice-select" required></select><p id="transcript-note" class="small muted">参照音声の文字起こしを登録すると、声を再現しやすくなります。</p>
+        <div class="form-footer"><span class="small muted">言語：日本語</span><button id="tts-button" class="button primary" type="submit">読み上げる <span aria-hidden="true">→</span></button></div>
+      </form><aside class="right-column"><div class="card result-card"><div class="card-heading"><h2>生成結果</h2><span class="tag">OUTPUT</span></div><div id="tts-result" class="result-body"></div></div><div class="tip-card"><span class="tip-icon" aria-hidden="true">✦</span><h3>句読点で、読みやすい文章に。</h3><p>固有名詞や数字が意図と違う読み方になったときは、ひらがなへの書き換えも試してください。</p></div></aside></div>
+    </section>
+    <section id="panel-voices" class="panel" hidden>
+      <div class="page-heading"><div><div class="eyebrow">MY VOICES</div><h1>あなたのボイスライブラリ。</h1><p>一度登録した声を、音声変換にも読み上げにも。</p></div><button class="button primary add-voice">＋ ボイスを登録</button></div>
+      <div class="library-note">即時クローンは、参照音声を保存して声を再現する方式です。話者専用モデルの追加学習は行いません。</div><div id="voice-library" class="voice-grid"></div>
+    </section>
+    <section id="panel-history" class="panel" hidden>
+      <div class="page-heading"><div><div class="eyebrow">HISTORY</div><h1>声の制作ノート。</h1><p>生成した音声を聴き直して、WAV・MP3で保存できます。</p></div><button id="refresh-history" class="button secondary">↻ 更新</button></div><div id="job-history"></div>
+    </section>
+    <footer class="page-footer"><span>こえのアトリエ</span><span>声を登録して、つくって、聴いて。あなたのPCから。</span></footer>
+  </div>
+</main>
+<dialog id="voice-dialog"><form id="voice-form">
+  <div class="dialog-heading"><div><div class="eyebrow">INSTANT VOICE CLONE</div><h2 id="dialog-title">新しいボイスを登録</h2></div><button type="button" id="close-dialog" class="icon-button" aria-label="閉じる">×</button></div>
+  <p class="muted">明瞭な声のサンプルを登録して、繰り返し使えるマイボイスに。</p>
+  <label class="field-label" for="voice-name">ボイス名 <span class="required">必須</span></label><input id="voice-name" name="name" maxlength="40" required placeholder="例：自分の声 / ナレーション用">
+  <div id="reference-fields"><label class="field-label" for="reference-file">声のサンプル <span class="required">必須</span></label><input id="reference-file" name="file" type="file" accept=".wav,.mp3" required><p class="small muted">WAV・MP3 / 3〜30秒 / 40 MB以内。10〜20秒程度をおすすめします。</p></div>
+  <label class="field-label" for="voice-transcript">サンプルで話している文章 <span class="optional">任意・推奨</span></label><textarea id="voice-transcript" name="transcript" maxlength="1000" rows="3" placeholder="音声で実際に話している内容を、そのまま入力してください。"></textarea><p class="small muted">読み上げの声の再現に使います。空欄でも利用できますが、品質が下がる場合があります。</p>
+  <label id="consent-label" class="checkbox"><input id="voice-consent" type="checkbox" name="consent" required><span>自分の声、または利用許可を得た声であることを確認しました。</span></label>
+  <div id="voice-error" class="form-error" role="alert"></div><button id="save-voice" class="button primary full" type="submit">ボイスを登録</button>
+</form></dialog>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+</body></html>
