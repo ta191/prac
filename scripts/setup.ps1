@@ -23,6 +23,18 @@ function Run-Checked([string]$Program, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "Command failed (exit $LASTEXITCODE): $Program" }
 }
 
+# Windows PowerShell 5.1 strips embedded double quotes in native -c arguments.
+# Write Python source to a UTF-8 file and pass only its path to the interpreter.
+function Run-PythonCode([string]$PythonExe, [string]$Code) {
+    $scriptPath = Join-Path $env:TEMP ('voiceai-' + [guid]::NewGuid().ToString('N') + '.py')
+    try {
+        [System.IO.File]::WriteAllText($scriptPath, $Code, [System.Text.UTF8Encoding]::new($false))
+        Run-Checked $PythonExe @($scriptPath)
+    } finally {
+        Remove-Item -LiteralPath $scriptPath -ErrorAction SilentlyContinue
+    }
+}
+
 $uiPython = Join-Path $voiceRoot '.venv-ui\Scripts\python.exe'
 $ttsPython = Join-Path $voiceRoot '.venv-tts\Scripts\python.exe'
 $vcPython = Join-Path $voiceRoot '.venv-vc\Scripts\python.exe'
@@ -37,7 +49,7 @@ try {
         }
         foreach ($pythonExe in @($ttsPython,$vcPython)) {
             if (Test-Path -LiteralPath $pythonExe) {
-                Run-Checked $pythonExe @('-c','import torch; print("torch",torch.__version__,"CUDA",torch.version.cuda,"available",torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "GPU unavailable")')
+                Run-PythonCode $pythonExe 'import torch; print("torch",torch.__version__,"CUDA",torch.version.cuda,"available",torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "GPU unavailable")'
             } else { Write-Host "Not installed: $pythonExe" }
         }
     } elseif ($Mode -eq 'models') {
@@ -70,7 +82,7 @@ try {
             }
         }
         Run-Checked $uvExe @('pip','install','--python',$uiPython,'-r','locks\windows-ui.txt')
-        Run-Checked $uiPython @('-c','import imageio_ffmpeg,shutil; shutil.copyfile(imageio_ffmpeg.get_ffmpeg_exe(),"tools/ffmpeg.exe")')
+        Run-PythonCode $uiPython 'import imageio_ffmpeg,shutil; shutil.copyfile(imageio_ffmpeg.get_ffmpeg_exe(),"tools/ffmpeg.exe")'
         Run-Checked $uvExe @('pip','install','--python',$ttsPython,'torch==2.6.0','torchaudio==2.6.0','--index-url','https://download.pytorch.org/whl/cu124')
         Run-Checked $uvExe @('pip','install','--python',$ttsPython,'-r','locks\windows-tts.txt')
         Run-Checked $uvExe @('pip','install','--python',$vcPython,'torch==2.5.1','torchaudio==2.5.1','--index-url','https://download.pytorch.org/whl/cu124')
@@ -86,8 +98,8 @@ try {
         foreach ($pythonExe in @($uiPython,$ttsPython,$vcPython)) {
             Run-Checked $uvExe @('pip','check','--python',$pythonExe)
         }
-        Run-Checked $ttsPython @('-c','import torch,qwen_tts; assert torch.cuda.is_available(), "CUDA unavailable"; print(torch.cuda.get_device_name(0))')
-        Run-Checked $vcPython @('-c','import torch,librosa,dac; assert torch.cuda.is_available(), "CUDA unavailable"; print(torch.cuda.get_device_name(0))')
+        Run-PythonCode $ttsPython 'import torch,qwen_tts; assert torch.cuda.is_available(), "CUDA unavailable"; print(torch.cuda.get_device_name(0))'
+        Run-PythonCode $vcPython 'import torch,librosa,dac; assert torch.cuda.is_available(), "CUDA unavailable"; print(torch.cuda.get_device_name(0))'
         & $uvExe pip freeze --python $ttsPython | Out-File -Encoding utf8 'logs\installed-tts.txt'
         & $uvExe pip freeze --python $vcPython | Out-File -Encoding utf8 'logs\installed-vc.txt'
         Set-Content -LiteralPath (Join-Path $voiceRoot 'tools\setup-complete.flag') -Value '0.1.0' -Encoding ascii
