@@ -39,9 +39,11 @@ def check_gpu():
 def qwen_model(path):
     import torch
     from qwen_tts import Qwen3TTSModel
-    # RTX 2070 SUPER (Turing): FP16 + SDPA, no BF16 or FlashAttention 2.
+    # Qwen's code predictor can overflow in FP16. Turing lacks native BF16.
+    # Upstream recommends FP32: https://github.com/QwenLM/Qwen3-TTS/issues/43
+    print('TTS runtime: device=cuda:0, precision=float32, attention=sdpa', flush=True)
     return Qwen3TTSModel.from_pretrained(str(path), device_map='cuda:0',
-                                       dtype=torch.float16, attn_implementation='sdpa')
+                                       dtype=torch.float32, attn_implementation='sdpa')
 
 
 def seed_module():
@@ -72,7 +74,8 @@ def prepare(kind):
         from huggingface_hub import snapshot_download
         path = snapshot_download(MODEL_ID)
         model = qwen_model(path)  # Also downloads tokenizer dependencies, and checks CUDA load.
-        details = {'model': MODEL_ID, 'path': path, 'revision': Path(path).name}
+        details = {'model': MODEL_ID, 'path': path, 'revision': Path(path).name,
+                   'precision': 'float32'}
         del model
     else:
         module = seed_module()
@@ -92,6 +95,7 @@ def prepare(kind):
 
 def infer(kind, request):
     gpu = check_gpu()
+    print('GPU runtime: ' + json.dumps(gpu, ensure_ascii=True), flush=True)
     output = Path(request['output'])
     started = time.monotonic()
     if kind == 'tts':
@@ -102,6 +106,7 @@ def infer(kind, request):
             raise RuntimeError('VOICEAI:モデルの保存先が見つかりません。02_prepare_models.batを再実行してください。')
         model = qwen_model(manifest['path'])
         reference_text = request['transcript'].strip()
+        print('TTS stage: generating voice clone', flush=True)
         audio, rate = model.generate_voice_clone(
             text=request['text'], language='Japanese', ref_audio=request['reference'],
             ref_text=reference_text or None, x_vector_only_mode=not bool(reference_text),
@@ -126,7 +131,7 @@ def infer(kind, request):
     gpu.update({'inference_seconds': round(time.monotonic()-started, 2),
                 'audio_seconds': round(len(samples)/rate, 2),
                 'peak_vram_mib': round(torch.cuda.max_memory_allocated()/1024**2),
-                'precision': 'float16', 'kind': kind})
+                'precision': 'float32' if kind == 'tts' else 'float16', 'kind': kind})
     write_json(output.parent/'metrics.json', gpu)
 
 
@@ -145,6 +150,8 @@ if __name__ == '__main__':
             if not args.request:
                 parser.error('request JSON is required')
             infer(args.kind, json.loads(Path(args.request).read_text('utf-8')))
-    except Exception:
+    except Exception as exc:
         traceback.print_exc()
+        if 'device-side assert' in str(exc).lower():
+            print('VOICEAI:GPUの音声生成処理が異常終了しました。画面の「ログ」を保存して共有してください。モデルの再取得ではなく、実行設定の確認が必要です。', flush=True)
         sys.exit(1)
