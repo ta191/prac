@@ -21,7 +21,7 @@ const wave = () => `<div class="waveform" aria-hidden="true">${Array.from({lengt
 // Use attributes to avoid inline event handlers; waveform heights are fixed visual decoration.
 function emptyResult() {return `<div class="empty-result">${wave()}<h3>ここから、新しい声が生まれます。</h3><p>生成が完了すると、ここで試聴できます。<br>WAV・MP3で保存できます。</p></div>`;}
 function controls(job) {
-  if (job.status==='done') return `<audio controls preload="none" src="/api/jobs/${job.id}/file/wav" aria-label="${esc(job.voice_name)}の生成音声"></audio><div class="downloads"><a class="button secondary" href="/api/jobs/${job.id}/file/wav" download>↓ WAV</a><a class="button secondary" href="/api/jobs/${job.id}/file/mp3" download>↓ MP3</a></div>`;
+  if (job.status==='done') return `<audio controls preload="none" src="/api/jobs/${job.id}/file/wav" aria-label="${esc(job.voice_name)}の生成音声"></audio><div class="downloads"><a class="button secondary" href="/api/jobs/${job.id}/file/wav" download>↓ WAV</a><a class="button secondary" href="/api/jobs/${job.id}/file/mp3" download>↓ MP3</a></div><a class="text-button" href="/api/jobs/${job.id}/log" download>診断ログを保存</a>`;
   if (['queued','running'].includes(job.status)) return `<div class="job-progress" aria-label="処理が完了するまでお待ちください"></div><button class="text-button" data-cancel="${job.id}">キャンセル</button>`;
   if(job.status==='failed') return `<a class="text-button" href="/api/jobs/${job.id}/log" target="_blank" rel="noopener">ログを確認</a>`;
   return '';

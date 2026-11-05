@@ -227,7 +227,9 @@ class AppTests(unittest.TestCase):
                 requests.append(request)
                 self.assertEqual(env['HF_HUB_OFFLINE'], '1')
                 if kind == 'asr':
-                    (folder/'reference-analysis.json').write_text(json.dumps({'text':'自動認識した全文。'}), 'utf-8')
+                    prepared = Path(request['reference']).with_name('tts-reference.wav')
+                    shutil.copyfile(request['reference'], prepared)
+                    (folder/'reference-analysis.json').write_text(json.dumps({'text':'自動認識した全文。', 'reference':str(prepared)}), 'utf-8')
                 else:
                     shutil.copyfile(request['reference'], folder/'output.wav')
             else:
@@ -240,7 +242,8 @@ class AppTests(unittest.TestCase):
         self.assertEqual(requests[0]['transcript'], '')
         self.assertEqual(requests[1]['transcript'], '自動認識した全文。')
         self.assertEqual(requests[1]['transcript_source'], 'automatic')
-        self.assertEqual(requests[0]['reference'], requests[1]['reference'])
+        self.assertEqual(Path(requests[0]['reference']).parent, Path(requests[1]['reference']).parent)
+        self.assertEqual(Path(requests[1]['reference']).name, 'tts-reference.wav')
 
     def test_cancel_during_asr_does_not_start_tts(self):
         from app.core import runtime_paths

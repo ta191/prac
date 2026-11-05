@@ -18,6 +18,20 @@ os.environ.setdefault('TOKENIZERS_PARALLELISM', 'false')
 os.environ['PATH'] = str(ROOT/'tools') + os.pathsep + os.environ.get('PATH', '')
 MODEL_ID = 'Qwen/Qwen3-TTS-12Hz-0.6B-Base'
 SEED_REVISION = '51383efd921027683c89e5348211d93ff12ac2a8'
+TTS_PROFILE = 'stable-v1'
+TTS_SEED = 42
+
+
+def seed_generation(seed):
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
 
 def write_json(path, data):
@@ -101,14 +115,19 @@ def generate_tts(model, request):
     import numpy as np
     # Old, manually entered partial transcripts are deliberately not consumed.
     reference_text = request.get('transcript', '').strip() if request.get('transcript_source') == 'automatic' else ''
+    if not reference_text:
+        raise RuntimeError('VOICEAI:参照音声の自動認識を確認できませんでした。声質を保つため生成を停止しました。手入力は不要です。ログを共有してください。')
     budget = min(4096, max(256, math.ceil((8 + .6 * len(request['text'])) * 12.5)))
-    modes = [reference_text, ''] if reference_text else ['']
-    for attempt, transcript in enumerate(modes, 1):
-        mode = 'automatic_transcript' if transcript else 'speaker_embedding'
-        print(f'TTS stage: generating, mode={mode}, max_new_tokens={budget}, attempt={attempt}', flush=True)
+    mode = 'automatic_transcript'
+    for attempt in (1, 2):
+        seed = TTS_SEED + attempt - 1
+        seed_generation(seed)
+        print(f'TTS stage: generating, profile={TTS_PROFILE}, mode={mode}, seed={seed}, non_streaming_mode=True, max_new_tokens={budget}, attempt={attempt}', flush=True)
         audio, rate = model.generate_voice_clone(
             text=request['text'], language='Japanese', ref_audio=request['reference'],
-            ref_text=transcript or None, x_vector_only_mode=not bool(transcript),
+            ref_text=reference_text, x_vector_only_mode=False, non_streaming_mode=True,
+            do_sample=True, top_k=50, top_p=1.0, temperature=.9, repetition_penalty=1.05,
+            subtalker_dosample=True, subtalker_top_k=50, subtalker_top_p=1.0, subtalker_temperature=.9,
             max_new_tokens=budget)
         samples = np.asarray(audio[0])
         if samples.size == 0 or not np.isfinite(samples).all():
@@ -118,7 +137,7 @@ def generate_tts(model, request):
         if len(samples) / rate >= (budget - 4) / 12.5:
             print('TTS did not finish within its generation limit.', flush=True)
             continue
-        return samples, rate, mode, budget
+        return samples, rate, mode, budget, seed
     raise RuntimeError('VOICEAI:読み上げが正常に終了しなかったため停止しました。文字起こしの手入力は不要です。ログを共有してください。')
 
 
@@ -138,8 +157,9 @@ def infer(kind, request):
         if not Path(manifest['path']).is_dir():
             raise RuntimeError('VOICEAI:モデルの保存先が見つかりません。02_prepare_models.batを再実行してください。')
         model = qwen_model(manifest['path'])
-        samples, rate, mode, budget = generate_tts(model, request)
-        gpu.update({'reference_mode': mode, 'max_new_tokens': budget})
+        samples, rate, mode, budget, seed = generate_tts(model, request)
+        gpu.update({'reference_mode': mode, 'max_new_tokens': budget,
+                    'profile': TTS_PROFILE, 'seed': seed, 'non_streaming_mode': True})
         sf.write(output, samples, rate, subtype='PCM_16')
     else:
         import soundfile as sf

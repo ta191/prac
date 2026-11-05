@@ -156,7 +156,7 @@ def runtime_status(root):
     return {'tts': prepared['tts'] and asr_ready, 'vc': prepared['vc'], 'asr': asr_ready, 'audio': audio_ready,
             'message': '利用準備完了' if all(prepared.values()) and asr_ready and audio_ready else
                        '初回準備・更新が必要です。アプリを終了し、START.batを実行してください。',
-            'version': '0.2.0', 'offline_inference': True}
+            'version': '0.2.1', 'offline_inference': True}
 
 
 def worker_environment(root):
@@ -285,6 +285,7 @@ class JobManager:
             analysis = json.loads((folder/'reference-analysis.json').read_text('utf-8'))
             request_path = folder/'request.json'
             request = json.loads(request_path.read_text('utf-8'))
+            request['reference'] = analysis['reference']
             request['transcript'] = analysis['text']
             request['transcript_source'] = 'automatic'
             request_path.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
