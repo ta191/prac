@@ -96,7 +96,8 @@ class AppTests(unittest.TestCase):
         vc=self.client.post('/api/jobs/vc',headers=self.headers,data={'voice_id':key,'steps':25},files={'file':('source.wav',self.sound,'audio/wav')})
         self.assertEqual(vc.status_code,200,vc.text);self.wait(vc.json()['id'])
         self.assertEqual(self.calls[0]['reference'],self.calls[1]['reference'])
-        self.assertEqual(self.calls[0]['transcript'],'こんにちは。')
+        self.assertEqual(self.calls[0]['transcript'],'')
+        self.assertEqual(self.calls[0]['transcript_source'],'automatic_pending')
         for extension in ('wav','mp3'):
             exported=self.client.get(f'/api/jobs/{tts}/file/{extension}')
             self.assertEqual(exported.status_code,200)
@@ -141,7 +142,7 @@ class AppTests(unittest.TestCase):
         with patch('app.main.runtime_status',return_value={'tts':False,'vc':False,'audio':True}):
             response=self.tts(key)
             self.assertEqual(response.status_code,400)
-            self.assertIn('02_prepare_models',response.text)
+            self.assertIn('START.bat',response.text)
 
     def test_failure_then_next_job_runs(self):
         key=self.voice().json()['id']
@@ -194,6 +195,68 @@ class AppTests(unittest.TestCase):
         self.assertEqual(env['HF_HUB_OFFLINE'],'1')
         self.assertEqual(env['TRANSFORMERS_OFFLINE'],'1')
         self.assertTrue(env['HF_HOME'].startswith(str(self.root)))
+
+    def test_registration_without_transcript_and_name_only_edit(self):
+        response = self.client.post('/api/voices', headers=self.headers,
+                                   data={'name':'音声のみ', 'consent':'true'},
+                                   files={'file':('reference.wav', self.sound, 'audio/wav')})
+        self.assertEqual(response.status_code, 200, response.text)
+        key = response.json()['id']
+        self.assertEqual(response.json()['transcript'], '')
+        updated = self.client.put(f'/api/voices/{key}', headers=self.headers, json={'name':'名前変更'})
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.wait(self.tts(key, '今日天気いいね。').json()['id'])
+        self.assertEqual(self.calls[-1]['reference'], str(self.app.state.store.voice_path(key)))
+        self.assertNotIn('voice-transcript', self.client.get('/').text)
+
+    def test_real_runner_orders_asr_before_tts_and_ignores_manual_text(self):
+        from app.core import runtime_paths
+        for path in runtime_paths(self.root).values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        manager = self.app.state.manager
+        stages = []
+        requests = []
+        real_process = manager.run_process
+        def process(command, key, logpath, env, timeout):
+            if len(command) > 2 and command[2] in ('asr', 'tts'):
+                kind = command[2]
+                stages.append(kind)
+                folder = manager.store.job_path(key)
+                request = json.loads((folder/'request.json').read_text('utf-8'))
+                requests.append(request)
+                self.assertEqual(env['HF_HUB_OFFLINE'], '1')
+                if kind == 'asr':
+                    (folder/'reference-analysis.json').write_text(json.dumps({'text':'自動認識した全文。'}), 'utf-8')
+                else:
+                    shutil.copyfile(request['reference'], folder/'output.wav')
+            else:
+                real_process(command, key, logpath, env, timeout)
+        manager.runner = manager.run_worker
+        with patch.object(manager, 'run_process', side_effect=process):
+            key = self.voice(transcript='途中までの手入力').json()['id']
+            self.wait(self.tts(key).json()['id'])
+        self.assertEqual(stages, ['asr', 'tts'])
+        self.assertEqual(requests[0]['transcript'], '')
+        self.assertEqual(requests[1]['transcript'], '自動認識した全文。')
+        self.assertEqual(requests[1]['transcript_source'], 'automatic')
+        self.assertEqual(requests[0]['reference'], requests[1]['reference'])
+
+    def test_cancel_during_asr_does_not_start_tts(self):
+        from app.core import runtime_paths
+        for path in runtime_paths(self.root).values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        manager = self.app.state.manager
+        stages = []
+        def process(command, key, *args, **kwargs):
+            stages.append(command[2])
+            manager.cancel(key)
+        manager.runner = manager.run_worker
+        with patch.object(manager, 'run_process', side_effect=process):
+            key = self.voice().json()['id']
+            self.wait(self.tts(key).json()['id'], 'cancelled')
+        self.assertEqual(stages, ['asr'])
 
 
 if __name__=='__main__':unittest.main()

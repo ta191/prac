@@ -152,10 +152,11 @@ def runtime_status(root):
     for kind in ('tts', 'vc'):
         manifest = root / 'models' / f'{kind}-ready.json'
         prepared[kind] = paths[kind].is_file() and manifest.is_file()
-    return {'tts': prepared['tts'], 'vc': prepared['vc'], 'audio': audio_ready,
-            'message': '利用準備完了' if all(prepared.values()) and audio_ready else
-                       '初回準備が必要です。01_setup.bat → 02_prepare_models.bat の順に実行してください。',
-            'version': '0.1.0', 'offline_inference': True}
+    asr_ready = paths['vc'].is_file() and (root/'models'/'asr-ready.json').is_file()
+    return {'tts': prepared['tts'] and asr_ready, 'vc': prepared['vc'], 'asr': asr_ready, 'audio': audio_ready,
+            'message': '利用準備完了' if all(prepared.values()) and asr_ready and audio_ready else
+                       '初回準備・更新が必要です。アプリを終了し、START.batを実行してください。',
+            'version': '0.2.0', 'offline_inference': True}
 
 
 def worker_environment(root):
@@ -195,7 +196,7 @@ class JobManager:
             folder = self.store.job_path(key)
             folder.mkdir()
             request = {'id': key, 'kind': kind, 'reference': str(self.store.voice_path(voice_id)),
-                       'transcript': voice['transcript'], 'text': text,
+                       'transcript': '', 'transcript_source': 'automatic_pending', 'text': text,
                        'output': str(folder / 'output.wav'), 'steps': steps,
                        'source': str(folder / 'source.wav') if source else None}
             try:
@@ -268,6 +269,29 @@ class JobManager:
         python = runtime_paths(root)[job['kind']]
         if not python.is_file():
             raise UserError('AI実行環境がありません。01_setup.batを実行してください。')
+        if job['kind'] == 'tts':
+            asr_python = runtime_paths(root)['vc']
+            if not asr_python.is_file():
+                raise UserError('自動音声認識の準備が必要です。アプリを終了し、START.batを実行してください。')
+            with self.store.lock:
+                if self.interrupted(job['id']):
+                    return
+                self.store.update_job(job['id'], 'running', '登録した声を自動解析しています。初回のみ少し時間がかかります。')
+            # A separate process finishes and releases the GPU before Qwen loads.
+            self.run_process([str(asr_python), str(root/'workers'/'inference.py'), 'asr', str(folder/'request.json')],
+                             job['id'], folder/'worker.log', worker_environment(root), timeout=300)
+            if self.interrupted(job['id']):
+                return
+            analysis = json.loads((folder/'reference-analysis.json').read_text('utf-8'))
+            request_path = folder/'request.json'
+            request = json.loads(request_path.read_text('utf-8'))
+            request['transcript'] = analysis['text']
+            request['transcript_source'] = 'automatic'
+            request_path.write_text(json.dumps(request, ensure_ascii=False), encoding='utf-8')
+            with self.store.lock:
+                if self.interrupted(job['id']):
+                    return
+                self.store.update_job(job['id'], 'running', '声の解析が完了しました。音声を生成しています。')
         command = [str(python), str(root/'workers'/'inference.py'), job['kind'], str(folder/'request.json')]
         self.run_process(command, job['id'], folder/'worker.log', worker_environment(root), timeout=1800)
         if self.interrupted(job['id']):

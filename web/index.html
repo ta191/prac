@@ -16,7 +16,7 @@
     <button class="nav-item" data-tab="voices"><span aria-hidden="true">◉</span>マイボイス<span id="voice-count" class="count">0</span></button>
     <button class="nav-item" data-tab="history"><span aria-hidden="true">◷</span>生成履歴</button>
   </nav>
-  <div class="sidebar-bottom"><span class="local-dot"></span> このPCで処理・保存<small>あなたの声から、新しい表現を。</small><span class="version">LOCAL EDITION / 0.1</span></div>
+  <div class="sidebar-bottom"><span class="local-dot"></span> このPCで処理・保存<small>あなたの声から、新しい表現を。</small><span class="version">LOCAL EDITION / 0.2</span></div>
 </aside>
 <main>
   <header class="topbar"><div><span class="crumb">ワークスペース</span><span class="slash">/</span><span id="crumb-title">音声変換</span></div><span class="local-badge"><span class="local-dot"></span>ローカルモード</span></header>
@@ -48,7 +48,7 @@
       <div class="editor-grid"><form id="tts-form" class="card editor-card">
         <div class="card-heading"><span class="step">01</span><h2>読み上げる文章</h2></div>
         <label class="sr-only" for="tts-text">日本語の文章</label><textarea id="tts-text" maxlength="500" required placeholder="ここに読み上げたい文章を入力してください。" rows="9"></textarea><div class="char-count"><span id="text-count">0</span> / 500文字</div>
-        <div class="card-heading"><span class="step">02</span><h2>読み上げるボイス</h2></div><label class="sr-only" for="tts-voice">ボイスを選択</label><select id="tts-voice" class="voice-select" required></select><p id="transcript-note" class="small muted">参照音声の文字起こしを登録すると、声を再現しやすくなります。</p>
+        <div class="card-heading"><span class="step">02</span><h2>読み上げるボイス</h2></div><label class="sr-only" for="tts-voice">ボイスを選択</label><select id="tts-voice" class="voice-select" required></select><p class="small muted">登録した音声をPC内で自動解析します。文字起こしの入力は不要です。</p>
         <div class="form-footer"><span class="small muted">言語：日本語</span><button id="tts-button" class="button primary" type="submit">読み上げる <span aria-hidden="true">→</span></button></div>
       </form><aside class="right-column"><div class="card result-card"><div class="card-heading"><h2>生成結果</h2><span class="tag">OUTPUT</span></div><div id="tts-result" class="result-body"></div></div><div class="tip-card"><span class="tip-icon" aria-hidden="true">✦</span><h3>句読点で、読みやすい文章に。</h3><p>固有名詞や数字が意図と違う読み方になったときは、ひらがなへの書き換えも試してください。</p></div></aside></div>
     </section>
@@ -67,7 +67,7 @@
   <p class="muted">明瞭な声のサンプルを登録して、繰り返し使えるマイボイスに。</p>
   <label class="field-label" for="voice-name">ボイス名 <span class="required">必須</span></label><input id="voice-name" name="name" maxlength="40" required placeholder="例：自分の声 / ナレーション用">
   <div id="reference-fields"><label class="field-label" for="reference-file">声のサンプル <span class="required">必須</span></label><input id="reference-file" name="file" type="file" accept=".wav,.mp3" required><p class="small muted">WAV・MP3 / 3〜30秒 / 40 MB以内。10〜20秒程度をおすすめします。</p></div>
-  <label class="field-label" for="voice-transcript">サンプルで話している文章 <span class="optional">任意・推奨</span></label><textarea id="voice-transcript" name="transcript" maxlength="1000" rows="3" placeholder="音声で実際に話している内容を、そのまま入力してください。"></textarea><p class="small muted">読み上げの声の再現に使います。空欄でも利用できますが、品質が下がる場合があります。</p>
+  <p class="small muted">音声ファイルだけで登録できます。文字起こしの入力は不要です。初めて読み上げるときに、PC内で声を自動解析します。</p>
   <label id="consent-label" class="checkbox"><input id="voice-consent" type="checkbox" name="consent" required><span>自分の声、または利用許可を得た声であることを確認しました。</span></label>
   <div id="voice-error" class="form-error" role="alert"></div><button id="save-voice" class="button primary full" type="submit">ボイスを登録</button>
 </form></dialog>

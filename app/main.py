@@ -20,7 +20,7 @@ SOURCE = Path(__file__).resolve().parent.parent
 
 class Rename(BaseModel):
     name: str = Field(min_length=1, max_length=40)
-    transcript: str = Field(default='', max_length=1000)
+    transcript: str | None = Field(default=None, max_length=1000)
 
 
 class TTSRequest(BaseModel):
@@ -143,7 +143,7 @@ def create_app(root=None, runner=None):
             voice = store.get('voices', key)
             with store.connect() as con:
                 con.execute('UPDATE voices SET name=?,transcript=? WHERE id=?',
-                            (value.name.strip(), value.transcript.strip(), voice['id']))
+                            (value.name.strip(), value.transcript.strip() if value.transcript is not None else voice['transcript'], voice['id']))
         return store.get('voices', key)
 
     @app.delete('/api/voices/{key}')
@@ -174,7 +174,7 @@ def create_app(root=None, runner=None):
         if not value.text.strip():
             raise UserError('読み上げる文章を入力してください。')
         if not runtime_status(store.root)['tts']:
-            raise UserError('読み上げモデルの準備が必要です。02_prepare_models.batを実行してください。')
+            raise UserError('読み上げの準備・更新が必要です。アプリを終了し、START.batを実行してください。')
         return {'id': manager.submit('tts', value.voice_id, text=value.text.strip())}
 
     @app.post('/api/jobs/vc')

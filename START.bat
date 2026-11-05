@@ -19,6 +19,7 @@ if errorlevel 1 goto failed
 :models
 if not exist "models\tts-ready.json" goto prepare_models
 if not exist "models\vc-ready.json" goto prepare_models
+if not exist "models\asr-ready.json" goto prepare_models
 goto start_app
 
 :prepare_models

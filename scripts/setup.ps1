@@ -61,6 +61,7 @@ try {
         Write-Host 'Downloading free model weights and checking GPU loading. This may take a while.'
         Run-Checked $ttsPython @('workers\inference.py','tts','--prepare')
         Run-Checked $vcPython @('workers\inference.py','vc','--prepare')
+        Run-Checked $vcPython @('workers\inference.py','asr','--prepare')
         Write-Host 'Models are ready. Run 03_start.bat.'
     } else {
         if (-not [Environment]::Is64BitOperatingSystem) { throw '64-bit Windows is required.' }

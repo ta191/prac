@@ -38,15 +38,11 @@ function updateButtons() {
   $('#convert-button').disabled=!state.status.vc || !state.voices.length || state.busy.has('vc');
   $('#tts-button').disabled=!state.status.tts || !state.voices.length || state.busy.has('tts');
 }
-function transcriptNote() {
-  const voice=state.voices.find(v=>v.id===$('#tts-voice').value);
-  $('#transcript-note').textContent=voice && !voice.transcript ? 'このボイスには文字起こしがありません。声の再現性を高めたい場合は、マイボイスの「編集」で追加してください。' : '登録した参照音声と文字起こしを使って、声を再現します。';
-}
 async function refreshVoices(selected) {
   state.voices=await api('/api/voices'); $('#voice-count').textContent=state.voices.length;
   $$('.voice-select').forEach(select=>{const prior=selected||select.value; select.innerHTML=state.voices.length ? state.voices.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('') : '<option value="">先にボイスを登録してください</option>'; if(state.voices.some(v=>v.id===prior)) select.value=prior;});
-  $('#voice-library').innerHTML=state.voices.length ? state.voices.map(v=>`<article class="card voice-card"><div class="voice-avatar" aria-hidden="true">◉</div><h3>${esc(v.name)}</h3><div class="meta">参照音声 ${v.duration.toFixed(1)}秒 · ${v.transcript?'文字起こしあり':'文字起こしなし'}</div><audio controls preload="none" src="/api/voices/${v.id}/audio" aria-label="${esc(v.name)}の参照音声"></audio><div class="voice-actions"><button class="text-button" data-use="${v.id}">この声で変換 →</button><button class="text-button" data-edit="${v.id}">編集</button><button class="text-button danger" data-delete="${v.id}">削除</button></div></article>`).join('') : '<div class="card empty-library"><div class="eyebrow">YOUR FIRST VOICE</div><h3>はじめての声を登録しましょう。</h3><p>短い音声サンプルから、あなただけのボイスライブラリを。<br>登録した声は、音声変換と読み上げの両方で使えます。</p><button class="button primary add-voice">＋ ボイスを登録</button></div>';
-  transcriptNote(); updateButtons();
+  $('#voice-library').innerHTML=state.voices.length ? state.voices.map(v=>`<article class="card voice-card"><div class="voice-avatar" aria-hidden="true">◉</div><h3>${esc(v.name)}</h3><div class="meta">参照音声 ${v.duration.toFixed(1)}秒 · 自動解析対応</div><audio controls preload="none" src="/api/voices/${v.id}/audio" aria-label="${esc(v.name)}の参照音声"></audio><div class="voice-actions"><button class="text-button" data-use="${v.id}">この声で変換 →</button><button class="text-button" data-edit="${v.id}">編集</button><button class="text-button danger" data-delete="${v.id}">削除</button></div></article>`).join('') : '<div class="card empty-library"><div class="eyebrow">YOUR FIRST VOICE</div><h3>はじめての声を登録しましょう。</h3><p>短い音声サンプルから、あなただけのボイスライブラリを。<br>登録した声は、音声変換と読み上げの両方で使えます。</p><button class="button primary add-voice">＋ ボイスを登録</button></div>';
+  updateButtons();
 }
 function renderHistory() {
   $('#job-history').innerHTML=state.jobs.length ? state.jobs.map(j=>`<article class="card history-row"><div><span class="status-label ${j.status}">${labels[j.status]||esc(j.status)}</span><h3>${j.kind==='tts'?'読み上げ':'音声変換'} · ${esc(j.voice_name)}</h3><div class="history-date">${esc(new Date(j.created).toLocaleString('ja-JP'))}${j.seconds!=null?' · '+Math.round(j.seconds)+'秒':''}</div><p class="job-message">${esc(j.message)}</p>${j.text?`<p class="small muted">${esc(j.text.slice(0,90))}${j.text.length>90?'…':''}</p>`:''}</div><div class="history-details">${controls(j)}</div></article>`).join('') : '<div class="card empty-library"><h3>制作の記録が、ここに並びます。</h3><p>音声を生成すると、試聴・保存できます。</p></div>';
@@ -61,7 +57,7 @@ function openVoice(id=null) {
   state.editing=id;const voice=state.voices.find(v=>v.id===id);$('#voice-form').reset();$('#voice-error').textContent='';
   $('#dialog-title').textContent=id?'ボイスを編集':'新しいボイスを登録';$('#save-voice').textContent=id?'変更を保存':'ボイスを登録';
   $('#reference-fields').hidden=!!id;$('#reference-file').required=!id;$('#consent-label').hidden=!!id;$('#voice-consent').required=!id;
-  if(voice){$('#voice-name').value=voice.name;$('#voice-transcript').value=voice.transcript;}
+  if(voice){$('#voice-name').value=voice.name;}
   $('#voice-dialog').showModal();$('#voice-name').focus();
 }
 $('#close-dialog').addEventListener('click',()=>$('#voice-dialog').close());
@@ -78,7 +74,7 @@ document.addEventListener('click',async event=>{
 $('#voice-form').addEventListener('submit',async e=>{
   e.preventDefault();const btn=$('#save-voice');btn.disabled=true;$('#close-dialog').disabled=true;$('#voice-error').textContent='';
   try {let voice;
-    if(state.editing) voice=await api(`/api/voices/${state.editing}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('#voice-name').value,transcript:$('#voice-transcript').value})});
+    if(state.editing) voice=await api(`/api/voices/${state.editing}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('#voice-name').value})});
     else {const data=new FormData(e.target);data.set('consent',String($('#voice-consent').checked));voice=await api('/api/voices',{method:'POST',body:data});}
     await refreshVoices(voice.id);$('#voice-dialog').close();toast(state.editing?'ボイスを更新しました。':'ボイスを登録しました。変換と読み上げの両方で使えます。');
   }catch(error){$('#voice-error').textContent=error.message;}finally{btn.disabled=false;$('#close-dialog').disabled=false;}
@@ -88,7 +84,6 @@ $('#source-file').addEventListener('change',sourceChanged);
 ['dragenter','dragover'].forEach(name=>$('#source-drop').addEventListener(name,e=>{e.preventDefault();$('#source-drop').classList.add('dragover');}));
 ['dragleave','drop'].forEach(name=>$('#source-drop').addEventListener(name,e=>{e.preventDefault();$('#source-drop').classList.remove('dragover');if(name==='drop'&&e.dataTransfer.files.length){const transfer=new DataTransfer();transfer.items.add(e.dataTransfer.files[0]);$('#source-file').files=transfer.files;sourceChanged();}}));
 $('#tts-text').addEventListener('input',()=>$('#text-count').textContent=$('#tts-text').value.length);
-$('#tts-voice').addEventListener('change',transcriptNote);
 async function submit(kind, body) {
   state.busy.add(kind); updateButtons();
   try {const options={method:'POST',body};if(kind==='tts') options.headers={'Content-Type':'application/json'};const job=await api(`/api/jobs/${kind}`,options);state.latest[kind]=job.id;await refreshJobs(true);toast('処理を受け付けました。順番に実行します。');}

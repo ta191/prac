@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -77,6 +78,9 @@ def prepare(kind):
         details = {'model': MODEL_ID, 'path': path, 'revision': Path(path).name,
                    'precision': 'float32'}
         del model
+    elif kind == 'asr':
+        from reference import prepare as prepare_asr
+        details = prepare_asr(ROOT)
     else:
         module = seed_module()
         models = module.load_models(seed_args())
@@ -93,7 +97,36 @@ def prepare(kind):
     print(f'{kind}: download and GPU loading completed. Speech quality is not yet tested.', flush=True)
 
 
+def generate_tts(model, request):
+    import numpy as np
+    # Old, manually entered partial transcripts are deliberately not consumed.
+    reference_text = request.get('transcript', '').strip() if request.get('transcript_source') == 'automatic' else ''
+    budget = min(4096, max(256, math.ceil((8 + .6 * len(request['text'])) * 12.5)))
+    modes = [reference_text, ''] if reference_text else ['']
+    for attempt, transcript in enumerate(modes, 1):
+        mode = 'automatic_transcript' if transcript else 'speaker_embedding'
+        print(f'TTS stage: generating, mode={mode}, max_new_tokens={budget}, attempt={attempt}', flush=True)
+        audio, rate = model.generate_voice_clone(
+            text=request['text'], language='Japanese', ref_audio=request['reference'],
+            ref_text=transcript or None, x_vector_only_mode=not bool(transcript),
+            max_new_tokens=budget)
+        samples = np.asarray(audio[0])
+        if samples.size == 0 or not np.isfinite(samples).all():
+            raise RuntimeError('VOICEAI:音声生成が不安定でした。ログを共有してください。')
+        # 12.5 acoustic frames/s; reaching the cap is not a successful utterance.
+        # A small tolerance accounts for the decoder's frame padding/cropping.
+        if len(samples) / rate >= (budget - 4) / 12.5:
+            print('TTS did not finish within its generation limit.', flush=True)
+            continue
+        return samples, rate, mode, budget
+    raise RuntimeError('VOICEAI:読み上げが正常に終了しなかったため停止しました。文字起こしの手入力は不要です。ログを共有してください。')
+
+
 def infer(kind, request):
+    if kind == 'asr':
+        from reference import transcribe
+        transcribe(ROOT, request, check_gpu)
+        return
     gpu = check_gpu()
     print('GPU runtime: ' + json.dumps(gpu, ensure_ascii=True), flush=True)
     output = Path(request['output'])
@@ -105,15 +138,8 @@ def infer(kind, request):
         if not Path(manifest['path']).is_dir():
             raise RuntimeError('VOICEAI:モデルの保存先が見つかりません。02_prepare_models.batを再実行してください。')
         model = qwen_model(manifest['path'])
-        reference_text = request['transcript'].strip()
-        print('TTS stage: generating voice clone', flush=True)
-        audio, rate = model.generate_voice_clone(
-            text=request['text'], language='Japanese', ref_audio=request['reference'],
-            ref_text=reference_text or None, x_vector_only_mode=not bool(reference_text),
-            max_new_tokens=4096)
-        samples = np.asarray(audio[0])
-        if not np.isfinite(samples).all() or samples.size == 0:
-            raise RuntimeError('VOICEAI:音声生成が不安定でした。文章を短くして再実行してください。')
+        samples, rate, mode, budget = generate_tts(model, request)
+        gpu.update({'reference_mode': mode, 'max_new_tokens': budget})
         sf.write(output, samples, rate, subtype='PCM_16')
     else:
         import soundfile as sf
@@ -137,7 +163,7 @@ def infer(kind, request):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('kind', choices=['tts', 'vc'])
+    parser.add_argument('kind', choices=['tts', 'vc', 'asr'])
     parser.add_argument('request', nargs='?')
     parser.add_argument('--prepare', action='store_true')
     args = parser.parse_args()

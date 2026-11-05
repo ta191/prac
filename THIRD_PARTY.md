@@ -9,6 +9,7 @@
 | Seed-VC | https://github.com/Plachtaa/seed-vc — GPL-3.0。取得コミット：51383efd921027683c89e5348211d93ff12ac2a8 |
 | Seed-VC重み | https://huggingface.co/Plachta/Seed-VC — 配布ページでGPL-3.0と表示 |
 | Seed-VCの関連モデル | CAMPPlus、Whisper、BigVGANなどを上流ローダーから取得。各配布元の条件も適用 |
+| Whisper small（参照音声の自動認識） | https://huggingface.co/openai/whisper-small ／ https://github.com/openai/whisper — MIT。既存のTransformers環境を使用 |
 | PyTorch／Torchaudio | https://pytorch.org/ — 各配布物のライセンスを参照 |
 | uv | https://github.com/astral-sh/uv — MIT／Apache-2.0。0.9.7のZIPを取得しSHA-256を検証 |
 | FFmpeg | https://ffmpeg.org/legal.html — imageio-ffmpegの同梱ビルドを使用。ビルド構成によりLGPL／GPL等の条件が適用 |
